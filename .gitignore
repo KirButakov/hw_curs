@@ -1,0 +1,64 @@
+# Python
+*.py[cod]
+__pycache__/
+*.so
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+
+# Distribution / Packaging
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+
+# Logs and debug
+*.log
+*.out
+*.err
+logs/
+*.gz
+
+# IDE and editor settings
+.idea/
+.vscode/
+*.swp
+*.swo
+*.DS_Store
+Thumbs.db
+
+# Testing
+htmlcov/
+.tox/
+.nox/
+.pytest_cache/
+coverage.xml
+*.cover
+.cache/
+
+# Environment variables
+.env
+.env.*
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Black
+.cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Django
+*.sqlite3
+media/
+staticfiles/
+
+# Optional: Remove if using Docker
+docker-compose.override.yml
