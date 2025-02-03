@@ -1,13 +1,20 @@
-import unittest
+from datetime import datetime
+
+import pytest
 
 from src.services import profitable_cashback_categories
 
 
-class TestServices(unittest.TestCase):
-    def test_profitable_cashback_categories(self):
-        data = [
-            {"date": "2023-10-01", "category": "Супермаркеты", "amount": 1000},
-            {"date": "2023-10-02", "category": "Топливо", "amount": 500},
-        ]
-        result = profitable_cashback_categories(data, 2023, 10)
-        self.assertEqual(result, {"Супермаркеты": 10.0, "Топливо": 5.0})
+@pytest.fixture
+def sample_transactions():
+    return [
+        {"date": "2024-07-01", "category": "Еда", "amount": 1000},
+        {"date": "2024-07-01", "category": "Одежда", "amount": 2000},
+        {"date": "2024-07-02", "category": "Еда", "amount": 500},
+        {"date": "2024-06-30", "category": "Транспорт", "amount": 300},
+    ]
+
+
+def test_profitable_cashback_categories(sample_transactions):
+    result = profitable_cashback_categories(sample_transactions, 2024, 7)
+    assert result == {"Еда": 15.0, "Одежда": 20.0}  # 1% от суммы

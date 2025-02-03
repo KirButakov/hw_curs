@@ -6,18 +6,19 @@ import pytest
 from src.reports import spending_by_category
 
 
-def test_spending_by_category():
-
-    data = pd.DataFrame(
-        {
-            "date": ["2023-09-01", "2023-10-01", "2023-11-01"],
-            "category": ["Супермаркеты", "Супермаркеты", "Супермаркеты"],
-            "amount": [100, 200, 300],
-        }
+@pytest.fixture
+def transactions_df():
+    return pd.DataFrame(
+        [
+            {"date": "2024-07-01", "category": "Еда", "amount": 1000},
+            {"date": "2024-07-02", "category": "Одежда", "amount": 2000},
+            {"date": "2024-06-30", "category": "Транспорт", "amount": 300},
+            {"date": "2024-07-03", "category": "Еда", "amount": 500},
+        ]
     )
 
-    # Делаем запрос на категорию "Супермаркеты" за октябрь 2023
-    result = spending_by_category(data, "Супермаркеты", "2023-10-01")
 
-    # Проверяем, что результат верный
-    assert result["amount"].sum() == 200  # Только за октябрь, сумма = 200
+def test_spending_by_category(transactions_df):
+    filtered = spending_by_category(transactions_df, "Еда", "2024-07-10")
+    assert len(filtered) == 2
+    assert filtered["amount"].sum() == 1500
