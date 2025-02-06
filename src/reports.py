@@ -1,37 +1,60 @@
 import logging
-from datetime import datetime, timedelta
-from typing import Optional
+from typing import Any, Callable, Dict, List
 
 import pandas as pd
 
 logging.basicConfig(level=logging.INFO)
 
 
-def spending_by_category(
-    transactions: pd.DataFrame, category: str, date: Optional[str] = None
-) -> pd.DataFrame:
-    """Фильтрует траты по заданной категории за текущий месяц."""
-    if date is None:
-        date = datetime.now().strftime("%Y-%m-%d")
+def report_decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+    """
+    Декоратор для логирования выполнения функции.
+    """
 
-    try:
-        end_date = datetime.strptime(date, "%Y-%m-%d")
-    except ValueError:
-        logging.error(f"Некорректный формат даты: {date}")
-        return pd.DataFrame()
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        logging.info(f"Запуск функции {func.__name__} с аргументами {args} и {kwargs}")
+        result = func(*args, **kwargs)
+        logging.info(f"Функция {func.__name__} завершена с результатом {result}")
+        return result
 
-    start_of_month = datetime(end_date.year, end_date.month, 1)
-    end_of_month = datetime(end_date.year, end_date.month, 1) + timedelta(days=30)
+    return wrapper
 
-    # Преобразуем колонку с датами
-    transactions["date"] = pd.to_datetime(
-        transactions["date"], format="%Y-%m-%d", errors="coerce"
-    )
 
-    # Фильтрация по диапазону дат и категории
-    filtered = transactions[
-        (transactions["date"] >= start_of_month)
-        & (transactions["date"] <= end_of_month)
-        & (transactions["category"] == category)
-    ]
-    return filtered
+@report_decorator
+def profitable_cashback_categories(
+    data: List[Dict[str, Any]], year: int, month: int
+) -> Dict[str, float]:
+    """Вычисляет сумму кэшбэка по категориям за указанный месяц и год."""
+    result: Dict[str, float] = {}
+
+    for transaction in data:
+        try:
+
+            date = pd.to_datetime(
+                transaction["Дата операции"],
+                format="%d.%m.%Y %H:%M:%S",
+                errors="coerce",
+            )
+            if pd.isna(date):
+                logging.warning(
+                    f"Пропущена транзакция с некорректной датой: {transaction}"
+                )
+                continue
+
+            # Проверяем, что транзакция за указанный год и месяц
+            if date.year == year and date.month == month:
+                category = transaction["Категория"]
+                amount = transaction["Сумма операции"]
+
+                # Кэшбэк только для положительных сумм
+                if amount > 0:
+                    cashback = amount * 0.01  # 1% кэшбэка
+                else:
+                    cashback = 0
+
+                # Добавляем кэшбэк в результат
+                result[category] = result.get(category, 0) + cashback
+
+        except (KeyError, ValueError) as e:
+            logging.warning(f"Ошибка в данных транзакции: {transaction} - {e}")
+    return result

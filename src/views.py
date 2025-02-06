@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from datetime import datetime
@@ -7,14 +8,11 @@ import pandas as pd
 import requests
 from dotenv import load_dotenv
 
-# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Загрузка переменных окружения
 load_dotenv()
 
-# Проверка наличия необходимых переменных окружения
 API_KEY = os.getenv("API_KEY")
 if not API_KEY:
     logger.error("API_KEY не задано в переменных окружения!")
@@ -29,12 +27,6 @@ if not STOCK_API_KEY:
 
 
 def get_greeting(time: datetime) -> str:
-    """
-    Возвращает приветствие в зависимости от текущего времени.
-
-    :param time: Время для вычисления приветствия.
-    :return: Приветствие, зависящее от времени суток.
-    """
     hour = time.hour
     if 5 <= hour < 12:
         return "Доброе утро"
@@ -47,22 +39,22 @@ def get_greeting(time: datetime) -> str:
 
 
 def get_currency_rates() -> List[Dict[str, Any]]:
-    """
-    Запрашивает курсы валют с API.
-
-    :return: Список курсов валют с их значениями.
-    """
     if not API_KEY:
         logger.error("API_KEY отсутствует, невозможно запросить курсы валют.")
         return []
 
+    with open("user_settings.json", "r") as f:
+        settings = json.load(f)
+        currencies = ",".join(settings["user_currencies"])
+
     url = "https://api.currencyapi.com/v3/latest"
-    params = {"apikey": API_KEY, "currencies": "USD,EUR"}
+    params = {"apikey": API_KEY, "currencies": currencies}
 
     try:
         response = requests.get(url, params=params)
-        response.raise_for_status()  # Генерирует исключение для статусов 4xx/5xx
+        response.raise_for_status()
         data = response.json()
+        logger.info(f"Получены курсы валют: {data}")
         return [{"currency": k, "rate": v["value"]} for k, v in data["data"].items()]
     except requests.exceptions.RequestException as e:
         logger.error(f"Ошибка запроса курсов валют: {e}")
@@ -70,22 +62,22 @@ def get_currency_rates() -> List[Dict[str, Any]]:
 
 
 def get_stock_prices() -> List[Dict[str, float]]:
-    """
-    Запрашивает цены акций с API.
-
-    :return: Список акций с их текущими ценами.
-    """
     if not STOCK_API_KEY:
         logger.error("STOCK_API_KEY отсутствует, невозможно запросить цены акций.")
         return []
 
+    with open("user_settings.json", "r") as f:
+        settings = json.load(f)
+        stocks = ",".join(settings["user_stocks"])
+
     url = "https://api.stockdata.org/v1/data/quote"
-    params = {"api_token": STOCK_API_KEY, "symbols": "AAPL,AMZN,GOOGL,MSFT,TSLA"}
+    params = {"api_token": STOCK_API_KEY, "symbols": stocks}
 
     try:
         response = requests.get(url, params=params)
-        response.raise_for_status()  # Генерирует исключение для статусов 4xx/5xx
+        response.raise_for_status()
         data = response.json()
+        logger.info(f"Получены цены акций: {data}")
         return [
             {"stock": item["symbol"], "price": item["price"]} for item in data["data"]
         ]
@@ -94,54 +86,63 @@ def get_stock_prices() -> List[Dict[str, float]]:
         return []
 
 
-def main_page(date_time: str) -> Dict[str, Any]:
-    """
-    Генерирует данные для главной страницы с приветствием, транзакциями, курсами валют и ценами на акции.
-
-    :param date_time: Время, по которому будет вычислено приветствие.
-    :return: Словарь с данными для отображения на главной странице.
-    """
+def main_page(date_time: str) -> str:
     try:
         time = datetime.strptime(date_time, "%Y-%m-%d %H:%M:%S")
     except ValueError as e:
         logger.error(f"Ошибка преобразования времени: {e}")
-        return {"error": "Неверный формат времени"}
+        return json.dumps(
+            {"error": "Неверный формат времени"}, ensure_ascii=False, indent=4
+        )
 
     greeting = get_greeting(time)
 
-    # Загрузка данных из Excel
+    # Чтение настроек
+    with open("user_settings.json", "r") as f:
+        settings = json.load(f)
+        currencies = ",".join(settings["user_currencies"])
+        stocks = ",".join(settings["user_stocks"])
+
+    # Чтение Excel файла
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(base_dir, "../data/operations.xlsx")
+
     try:
-        transactions = pd.read_excel("../data/operations.xlsx")
+        transactions = pd.read_excel(file_path)
     except Exception as e:
         logger.error(f"Ошибка при чтении файла Excel: {e}")
-        return {"error": "Не удалось загрузить данные транзакций"}
+        return json.dumps(
+            {"error": "Не удалось загрузить данные транзакций"},
+            ensure_ascii=False,
+            indent=4,
+        )
 
-    # Пример обработки данных (сортировка по 'Сумма операции')
     top_transactions = transactions.nlargest(5, "Сумма операции").to_dict("records")
 
-    # Получение курсов валют и цен на акции
     currency_rates = get_currency_rates()
     stock_prices = get_stock_prices()
 
-    # Данные для карточек (загружаем из файла operations.xlsx)
-    # Используем столбцы: 'Номер карты', 'Сумма операции', 'Бонусы (включая кэшбэк)'
+    cards_data = transactions[
+        ["Номер карты", "Сумма операции", "Бонусы (включая кэшбэк)"]
+    ]
+    cards_data.loc[:, "last_digits"] = cards_data["Номер карты"].astype(str).str[-4:]
+    cards_data.loc[:, "total_spent"] = cards_data["Сумма операции"]
+    cards_data.loc[:, "cashback"] = cards_data["Бонусы (включая кэшбэк)"].fillna(0)
+
     cards = (
-        transactions[["Номер карты", "Сумма операции", "Бонусы (включая кэшбэк)"]]
-        .rename(
-            columns={
-                "Номер карты": "last_digits",
-                "Сумма операции": "total_spent",
-                "Бонусы (включая кэшбэк)": "cashback",
-            }
-        )
-        .fillna({"cashback": 0})
+        cards_data[["last_digits", "total_spent", "cashback"]]
+        .drop_duplicates()
         .to_dict("records")
     )
 
-    return {
-        "greeting": greeting,
-        "cards": cards,
-        "top_transactions": top_transactions,
-        "currency_rates": currency_rates,
-        "stock_prices": stock_prices,
-    }
+    return json.dumps(
+        {
+            "greeting": greeting,
+            "cards": cards,
+            "top_transactions": top_transactions,
+            "currency_rates": currency_rates,
+            "stock_prices": stock_prices,
+        },
+        ensure_ascii=False,
+        indent=4,
+    )

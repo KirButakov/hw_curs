@@ -1,24 +1,45 @@
-from datetime import datetime
-
-import pandas as pd
-import pytest
-
-from src.reports import spending_by_category
+import unittest
 
 
-@pytest.fixture
-def transactions_df():
-    return pd.DataFrame(
-        [
-            {"date": "2024-07-01", "category": "Еда", "amount": 1000},
-            {"date": "2024-07-02", "category": "Одежда", "amount": 2000},
-            {"date": "2024-06-30", "category": "Транспорт", "amount": 300},
-            {"date": "2024-07-03", "category": "Еда", "amount": 500},
+from src.reports import profitable_cashback_categories, report_decorator
+
+
+class TestReports(unittest.TestCase):
+
+    def test_profitable_cashback_categories(self):
+        data = [
+            {
+                "Дата операции": "01.10.2023 12:00:00",
+                "Категория": "Еда",
+                "Сумма операции": 1000,
+            },
+            {
+                "Дата операции": "02.10.2023 12:00:00",
+                "Категория": "Транспорт",
+                "Сумма операции": 500,
+            },
+            {
+                "Дата операции": "03.10.2023 12:00:00",
+                "Категория": "Еда",
+                "Сумма операции": 2000,
+            },
         ]
-    )
+        result = profitable_cashback_categories(data, 2023, 10)
+        self.assertEqual(result, {"Еда": 30.0, "Транспорт": 5.0})
+
+    def test_report_decorator(self):
+        @report_decorator
+        def dummy_function(x):
+            return x * 2
+
+        with self.assertLogs(level="INFO") as log:
+            result = dummy_function(5)
+            self.assertEqual(result, 10)
+            self.assertIn("Запуск функции dummy_function", log.output[0])
+            self.assertIn(
+                "Функция dummy_function завершена с результатом 10", log.output[1]
+            )
 
 
-def test_spending_by_category(transactions_df):
-    filtered = spending_by_category(transactions_df, "Еда", "2024-07-10")
-    assert len(filtered) == 2
-    assert filtered["amount"].sum() == 1500
+if __name__ == "__main__":
+    unittest.main()
