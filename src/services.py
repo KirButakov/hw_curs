@@ -1,23 +1,15 @@
 import logging
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
 logging.basicConfig(level=logging.INFO)
 
 
-def profitable_cashback_categories(
-    data: List[Dict[str, Any]], year: int, month: int
-) -> Dict[str, float]:
-    """Вычисляет сумму кэшбэка по категориям за указанный месяц и год."""
-    result: Dict[str, float] = {}
-    for transaction in data:
-        try:
-            date = datetime.strptime(transaction["date"], "%Y-%m-%d")
-            if date.year == year and date.month == month:
-                category = transaction["category"]
-                amount = transaction["amount"]
-                cashback = amount * 0.01  # 1% кэшбэка
-                result[category] = result.get(category, 0) + cashback
-        except (KeyError, ValueError) as e:
-            logging.warning(f"Ошибка в данных транзакции: {transaction} - {e}")
-    return result
+def get_currency_rates() -> List[Dict[str, Any]]:
+    """Функция заглушка, которая имитирует получение курсов валют"""
+    return [{"currency": "USD", "rate": 90.5}, {"currency": "EUR", "rate": 98.7}]
+
+
+def get_stock_prices() -> List[Dict[str, Union[str, float]]]:
+    """Функция заглушка, которая имитирует получение цен акци"""
+    return [{"stock": "AAPL", "price": 150.5}, {"stock": "TSLA", "price": 700.3}]

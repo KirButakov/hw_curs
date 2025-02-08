@@ -1,26 +1,40 @@
 import logging
-from typing import Any, Callable, Dict, List
+import os
+from typing import Any, Callable, Dict, List, Optional
 
 import pandas as pd
 
 logging.basicConfig(level=logging.INFO)
 
 
-def report_decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+def report_decorator(file_path: Optional[str] = None) -> Callable[..., Any]:
     """
-    Декоратор для логирования выполнения функции.
+    Декоратор для логирования выполнения функции с возможностью записи в файл.
+
+
     """
 
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
-        logging.info(f"Запуск функции {func.__name__} с аргументами {args} и {kwargs}")
-        result = func(*args, **kwargs)
-        logging.info(f"Функция {func.__name__} завершена с результатом {result}")
-        return result
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            logging.info(
+                f"Запуск функции {func.__name__} с аргументами {args} и {kwargs}"
+            )
+            result = func(*args, **kwargs)
+            logging.info(f"Функция {func.__name__} завершена с результатом {result}")
 
-    return wrapper
+            # Используем путь к файлу, если он передан, иначе создаем файл по умолчанию
+            log_file = file_path or f"report_{func.__name__}.log"
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(f"Функция {func.__name__} выполнена. Результат: {result}\n")
+
+            return result
+
+        return wrapper
+
+    return decorator
 
 
-@report_decorator
+@report_decorator()  # Использует файл по умолчанию
 def profitable_cashback_categories(
     data: List[Dict[str, Any]], year: int, month: int
 ) -> Dict[str, float]:
@@ -29,7 +43,6 @@ def profitable_cashback_categories(
 
     for transaction in data:
         try:
-
             date = pd.to_datetime(
                 transaction["Дата операции"],
                 format="%d.%m.%Y %H:%M:%S",

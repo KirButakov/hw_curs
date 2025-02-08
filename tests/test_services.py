@@ -1,20 +1,13 @@
-from datetime import datetime
-
-import pytest
-
-from src.services import profitable_cashback_categories
+from src.services import get_currency_rates, get_stock_prices
 
 
-@pytest.fixture
-def sample_transactions():
-    return [
-        {"date": "2024-07-01", "category": "Еда", "amount": 1000},
-        {"date": "2024-07-01", "category": "Одежда", "amount": 2000},
-        {"date": "2024-07-02", "category": "Еда", "amount": 500},
-        {"date": "2024-06-30", "category": "Транспорт", "amount": 300},
-    ]
+def test_get_currency_rates():
+    rates = get_currency_rates()
+    assert isinstance(rates, list)
+    assert rates[0]["currency"] == "USD"
 
 
-def test_profitable_cashback_categories(sample_transactions):
-    result = profitable_cashback_categories(sample_transactions, 2024, 7)
-    assert result == {"Еда": 15.0, "Одежда": 20.0}  # 1% от суммы
+def test_get_stock_prices():
+    stocks = get_stock_prices()
+    assert isinstance(stocks, list)
+    assert stocks[0]["stock"] == "AAPL"

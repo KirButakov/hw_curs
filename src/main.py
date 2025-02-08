@@ -3,6 +3,8 @@ import logging
 import pandas as pd
 
 from reports import profitable_cashback_categories
+from services import get_currency_rates, get_stock_prices
+from views import main_page
 
 logging.basicConfig(level=logging.INFO)
 
@@ -21,7 +23,7 @@ if __name__ == "__main__":
         if not invalid_dates.empty:
             logging.warning(f"Некорректные строки с датами:\n{invalid_dates}")
 
-        # Удаляем строки с пустыми или NaN значениями в столбце "Категория"
+        # Удаляем строки с пустыми значениями в столбце "Категория"
         transactions = transactions.dropna(subset=["Категория"])
 
         # Преобразуем данные в список словарей и передаем в функцию
@@ -29,7 +31,12 @@ if __name__ == "__main__":
             transactions.to_dict("records"), 2018, 1
         )
 
-        # Выводим результат
+        # Вызов функций "Веб страницы" и "Сервисы"
+        print(main_page("2025-02-08 10:30:00"))
+        print(get_currency_rates())
+        print(get_stock_prices())
+
+        # Вывод результата
         logging.info(
             f"Функция profitable_cashback_categories завершена с результатом {result}"
         )
