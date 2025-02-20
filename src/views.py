@@ -1,73 +1,59 @@
 import json
 import logging
-import os
 from datetime import datetime
 
-import pandas as pd
-from dotenv import load_dotenv
+from src.utils import (
+    get_currency_rates,
+    get_greeting,
+    get_stock_prices,
+    get_top_transactions,
+    get_transactions,
+    process_cards,
+)
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-load_dotenv()
-
-API_KEY = os.getenv("API_KEY")
-if not API_KEY:
-    logger.error("API_KEY не задано в переменных окружения!")
-
-CURRENCY_API_KEY = os.getenv("CURRENCY_API_KEY")
-if not CURRENCY_API_KEY:
-    logger.error("CURRENCY_API_KEY не задано в переменных окружения!")
-
-STOCK_API_KEY = os.getenv("STOCK_API_KEY")
-if not STOCK_API_KEY:
-    logger.error("STOCK_API_KEY не задано в переменных окружения!")
+logging.basicConfig(
+    level=logging.INFO,
+    filename="app.log",
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
 
 
-def get_greeting(time: datetime) -> str:
-    hour = time.hour
-    if 5 <= hour < 12:
-        return "Доброе утро"
-    elif 12 <= hour < 18:
-        return "Добрый день"
-    elif 18 <= hour < 23:
-        return "Добрый вечер"
-    else:
-        return "Доброй ночи"
-
-
-def main_page(date_time: str) -> str:
+def validate_date(date_str: str) -> bool:
     try:
-        time = datetime.strptime(date_time, "%Y-%m-%d %H:%M:%S")
-    except ValueError as e:
-        logger.error(f"Ошибка преобразования времени: {e}")
-        return json.dumps(
-            {"error": "Неверный формат времени"}, ensure_ascii=False, indent=4
-        )
+        datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+        return True
+    except ValueError:
+        return False
 
-    greeting = get_greeting(time)
 
-    # Чтение Excel файла
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(base_dir, "../data/operations.xlsx")
+def home(date_str: str) -> None:
+    print(f"DEBUG: Получена дата - {date_str}")
+
+    if not validate_date(date_str):
+        logging.error(f"Некорректный формат даты: {date_str}")
+        print("⚠ Ошибка: Некорректный формат даты. Используйте YYYY-MM-DD HH:MM:SS")
+        return
 
     try:
-        transactions = pd.read_excel(file_path)
-    except Exception as e:
-        logger.error(f"Ошибка при чтении файла Excel: {e}")
-        return json.dumps(
-            {"error": "Не удалось загрузить данные транзакций"},
-            ensure_ascii=False,
-            indent=4,
-        )
+        date = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+        greeting = get_greeting(date)
+        transactions = get_transactions(date)
+        cards = process_cards(transactions)
+        top_transactions = get_top_transactions(transactions)
+        currency_rates = get_currency_rates()
+        stock_prices = get_stock_prices()
 
-    top_transactions = transactions.nlargest(5, "Сумма операции").to_dict("records")
-
-    return json.dumps(
-        {
+        response = {
             "greeting": greeting,
+            "cards": cards,
             "top_transactions": top_transactions,
-        },
-        ensure_ascii=False,
-        indent=4,
-    )
+            "currency_rates": currency_rates,
+            "stock_prices": stock_prices,
+        }
+
+        print("\n🏠 Главная страница:")
+        print(json.dumps(response, indent=4, ensure_ascii=False))
+
+    except Exception as e:
+        logging.error(f"Ошибка обработки запроса: {e}")
+        print(f"⚠ Ошибка: {e}")

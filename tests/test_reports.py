@@ -1,28 +1,48 @@
-from src.reports import profitable_cashback_categories, report_decorator
+import json
+import os
+from datetime import datetime, timedelta
+
+import pandas as pd
+import pytest
+
+from src.reports import save_report, spending_by_category
 
 
-def test_report_decorator(mocker):
-    mock_func = mocker.Mock(return_value="test_result")
-    mock_func.__name__ = "mock_function"
-
-    decorated_func = report_decorator("test.log")(mock_func)
-    result = decorated_func()
-
-    assert result == "test_result"
-
-
-def test_profitable_cashback_categories():
-    data = [
+@pytest.fixture
+def sample_transactions():
+    """Создает тестовый DataFrame с транзакциями."""
+    return pd.DataFrame(
         {
-            "Дата операции": "01.01.2018 12:00:00",
-            "Категория": "Продукты",
-            "Сумма операции": 1000,
-        },
-        {
-            "Дата операции": "01.01.2018 12:00:00",
-            "Категория": "Транспорт",
-            "Сумма операции": -500,
-        },
-    ]
-    result = profitable_cashback_categories(data, 2018, 1)
-    assert result == {"Продукты": 10.0, "Транспорт": 0}
+            "Дата операции": [
+                (datetime.today() - timedelta(days=i)).strftime("%d.%m.%Y")
+                for i in range(5, 100, 10)
+            ],
+            "Сумма операции": [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000],
+            "Категория": ["Продукты"] * 5 + ["Развлечения"] * 5,
+        }
+    )
+
+
+def test_spending_by_category_valid(sample_transactions):
+    """Тестирует корректный расчет расходов по категории."""
+    result = spending_by_category(sample_transactions, "Продукты")
+
+    assert "category" in result
+    assert "total_spent" in result
+    assert result["category"] == "Продукты"
+    assert result["total_spent"] == 1500  # 100 + 200 + 300 + 400 + 500
+
+
+def test_spending_by_category_no_category(sample_transactions):
+    """Тестирует случай, когда указанной категории нет в данных."""
+    result = spending_by_category(sample_transactions, "Такси")
+
+    assert result["total_spent"] == 0
+
+
+def test_spending_by_category_invalid_columns():
+    """Тестирует обработку отсутствия нужных колонок."""
+    df = pd.DataFrame({"Wrong Column": [1, 2, 3]})
+    result = spending_by_category(df, "Продукты")
+
+    assert "error" in result

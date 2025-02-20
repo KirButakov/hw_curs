@@ -1,39 +1,73 @@
 import json
 from datetime import datetime
+from unittest.mock import patch
 
-import pandas as pd
 import pytest
 
-from src.views import get_greeting, main_page
+from src.views import home, validate_date
 
 
 @pytest.mark.parametrize(
-    "input_time, expected_greeting",
+    "date_str, expected",
     [
-        (datetime(2025, 2, 8, 6, 0, 0), "Доброе утро"),
-        (datetime(2025, 2, 8, 13, 0, 0), "Добрый день"),
-        (datetime(2025, 2, 8, 19, 0, 0), "Добрый вечер"),
-        (datetime(2025, 2, 8, 2, 0, 0), "Доброй ночи"),
+        ("2024-02-20 15:30:00", True),  # Корректный формат
+        ("2024-02-20", False),  # Нет времени
+        ("20.02.2024 15:30:00", False),  # Неправильный формат
+        ("2024/02/20 15:30:00", False),  # Слеши вместо дефисов
+        ("invalid_date", False),  # Полностью неверное значение
     ],
 )
-def test_get_greeting(input_time, expected_greeting):
-    assert get_greeting(input_time) == expected_greeting
+def test_validate_date(date_str, expected):
+    """Проверяет корректность валидации даты."""
+    assert validate_date(date_str) == expected
 
 
-def test_main_page_valid_time(mocker):
+@patch("src.views.get_greeting", return_value="Добрый день!")
+@patch("src.views.get_transactions", return_value=[{"id": 1, "amount": 100}])
+@patch("src.views.process_cards", return_value=[{"card": "Visa", "balance": 5000}])
+@patch("src.views.get_top_transactions", return_value=[{"id": 1, "amount": 100}])
+@patch("src.views.get_currency_rates", return_value={"USD": 92.5})
+@patch("src.views.get_stock_prices", return_value={"AAPL": 150.0})
+def test_home_valid(
+    mock_greeting,
+    mock_transactions,
+    mock_process_cards,
+    mock_top_transactions,
+    mock_currency_rates,
+    mock_stock_prices,
+    capsys,
+):
+    """Тестирует корректный вывод функции home."""
+    home("2024-02-20 15:30:00")
+    captured = capsys.readouterr()
 
-    mock_transactions = pd.DataFrame({"Сумма операции": [100, 200, 300, 400, 500]})
+    response = json.loads(
+        captured.out.split("\n🏠 Главная страница:\n")[1]  # Парсим JSON из вывода
+    )
 
-    mocker.patch("src.views.pd.read_excel", return_value=mock_transactions)
-
-    response = json.loads(main_page("2025-02-08 10:30:00"))
-
-    assert "greeting" in response
-    assert "top_transactions" in response
-    assert isinstance(response["top_transactions"], list)  # Проверяем, что это список
-    assert len(response["top_transactions"]) > 0  # Проверяем, что есть данные
+    assert response["greeting"] == "Добрый день!"
+    assert response["cards"] == [{"card": "Visa", "balance": 5000}]
+    assert response["top_transactions"] == [{"id": 1, "amount": 100}]
+    assert response["currency_rates"] == {"USD": 92.5}
+    assert response["stock_prices"] == {"AAPL": 150.0}
 
 
-def test_main_page_invalid_time():
-    response = json.loads(main_page("INVALID_DATE"))
-    assert response == {"error": "Неверный формат времени"}
+@patch("src.views.logging.error")
+def test_home_invalid_date(mock_logging, capsys):
+    """Тестирует обработку некорректного формата даты."""
+    home("неправильная дата")
+    captured = capsys.readouterr()
+
+    assert "⚠ Ошибка: Некорректный формат даты." in captured.out
+    mock_logging.assert_called_once_with("Некорректный формат даты: неправильная дата")
+
+
+@patch("src.views.get_greeting", side_effect=Exception("Ошибка сервиса"))
+@patch("src.views.logging.error")
+def test_home_service_failure(mock_logging, mock_greeting, capsys):
+    """Тестирует обработку ошибки при вызове внешних сервисов."""
+    home("2024-02-20 15:30:00")
+    captured = capsys.readouterr()
+
+    assert "⚠ Ошибка: Ошибка сервиса" in captured.out
+    mock_logging.assert_called_once_with("Ошибка обработки запроса: Ошибка сервиса")

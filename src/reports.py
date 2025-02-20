@@ -1,73 +1,107 @@
+import json
 import logging
-import os
-from typing import Any, Callable, Dict, List, Optional
+from datetime import datetime, timedelta
+from typing import Any, Callable, Dict, Optional, TypeVar, cast
 
+import numpy as np
 import pandas as pd
 
-logging.basicConfig(level=logging.INFO)
+T = TypeVar("T", bound=Callable[..., Any])
+
+# Настройка логирования
+logging.basicConfig(
+    filename="reports.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
 
 
-def report_decorator(file_path: Optional[str] = None) -> Callable[..., Any]:
+def save_report(file_name: Optional[str] = None) -> Callable[[T], T]:
     """
-    Декоратор для логирования выполнения функции с возможностью записи в файл.
-
-
+    Декоратор для сохранения отчета в файл.
     """
 
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+    def decorator(func: T) -> T:
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            logging.info(
-                f"Запуск функции {func.__name__} с аргументами {args} и {kwargs}"
-            )
             result = func(*args, **kwargs)
-            logging.info(f"Функция {func.__name__} завершена с результатом {result}")
 
-            # Используем путь к файлу, если он передан, иначе создаем файл по умолчанию
-            log_file = file_path or f"report_{func.__name__}.log"
-            with open(log_file, "a", encoding="utf-8") as f:
-                f.write(f"Функция {func.__name__} выполнена. Результат: {result}\n")
+            # Преобразуем все числа в int для корректного сохранения в JSON
+            if isinstance(result, dict):
+                result = {
+                    key: (
+                        int(value)
+                        if isinstance(value, (np.integer, np.int64, float))
+                        else value
+                    )
+                    for key, value in result.items()
+                }
 
+            file = file_name or "default_report.json"
+            with open(file, "w") as f:
+                json.dump(result, f, indent=4, ensure_ascii=False)
+
+            logging.info(f"Отчет сохранен в файл: {file}")
             return result
 
-        return wrapper
+        return cast(T, wrapper)
 
     return decorator
 
 
-@report_decorator()  # Использует файл по умолчанию
-def profitable_cashback_categories(
-    data: List[Dict[str, Any]], year: int, month: int
-) -> Dict[str, float]:
-    """Вычисляет сумму кэшбэка по категориям за указанный месяц и год."""
-    result: Dict[str, float] = {}
+@save_report()
+def spending_by_category(
+    transactions: pd.DataFrame, category: str, date: Optional[str] = None
+) -> Dict[str, Any]:
+    try:
+        transactions = transactions.copy()
 
-    for transaction in data:
-        try:
-            date = pd.to_datetime(
-                transaction["Дата операции"],
-                format="%d.%m.%Y %H:%M:%S",
-                errors="coerce",
-            )
-            if pd.isna(date):
-                logging.warning(
-                    f"Пропущена транзакция с некорректной датой: {transaction}"
-                )
-                continue
+        # Проверяем, есть ли нужные колонки
+        if (
+            "Дата операции" not in transactions.columns
+            or "Сумма операции" not in transactions.columns
+        ):
+            return {
+                "error": "Файл не содержит нужные колонки ('Дата операции', 'Сумма операции')"
+            }
 
-            # Проверяем, что транзакция за указанный год и месяц
-            if date.year == year and date.month == month:
-                category = transaction["Категория"]
-                amount = transaction["Сумма операции"]
+        # Преобразуем дату в формат datetime
+        transactions["Дата операции"] = pd.to_datetime(
+            transactions["Дата операции"], format="%d.%m.%Y", errors="coerce"
+        )
 
-                # Кэшбэк только для положительных сумм
-                if amount > 0:
-                    cashback = amount * 0.01  # 1% кэшбэка
-                else:
-                    cashback = 0
+        # Преобразуем сумму в float
+        transactions["Сумма операции"] = pd.to_numeric(
+            transactions["Сумма операции"], errors="coerce"
+        ).fillna(0)
 
-                # Добавляем кэшбэк в результат
-                result[category] = result.get(category, 0) + cashback
+        # Если дата не задана, используем текущую
+        if date is None:
+            date = datetime.today().strftime("%Y-%m-%d")
 
-        except (KeyError, ValueError) as e:
-            logging.warning(f"Ошибка в данных транзакции: {transaction} - {e}")
-    return result
+        date_obj = pd.to_datetime(date)
+        start_date = date_obj - timedelta(days=90)  # Анализ за последние 90 дней
+
+        # Фильтрация по категории и диапазону дат
+        filtered_data = transactions.loc[
+            (transactions["Категория"].str.strip() == category.strip())
+            & (transactions["Дата операции"] >= start_date)
+            & (transactions["Дата операции"] <= date_obj)
+        ]
+
+        total_spent = filtered_data["Сумма операции"].sum()
+        result = {
+            "category": category,
+            "total_spent": total_spent,
+            "from": start_date.strftime("%Y-%m-%d"),
+            "to": date_obj.strftime("%Y-%m-%d"),
+        }
+
+        logging.info(
+            f"Отчет по тратам в категории '{category}' с {start_date.strftime('%Y-%m-%d')} "
+            f"по {date_obj.strftime('%Y-%m-%d')} успешно сформирован."
+        )
+        return result
+
+    except Exception as e:
+        logging.error(f"Ошибка при формировании отчета: {str(e)}")
+        return {"error": str(e)}
