@@ -1,6 +1,9 @@
 import json
 import logging
+import os
 from datetime import datetime
+
+from dotenv import load_dotenv
 
 from src.utils import (
     get_currency_rates,
@@ -10,6 +13,9 @@ from src.utils import (
     get_transactions,
     process_cards,
 )
+
+dotenv_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+load_dotenv(dotenv_path)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,7 +45,7 @@ def home(date_str: str) -> None:
         greeting = get_greeting(date)
         transactions = get_transactions(date)
         cards = process_cards(transactions)
-        top_transactions = get_top_transactions(transactions)
+        top_transactions = get_top_transactions()
         currency_rates = get_currency_rates()
         stock_prices = get_stock_prices()
 
