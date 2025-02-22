@@ -1,0 +1,4 @@
+{
+    "preferred_currency": "USD",
+    "stocks": ["AAPL", "AMZN", "GOOGL", "MSFT", "TSLA"]
+}
